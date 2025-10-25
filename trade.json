@@ -3,6 +3,7 @@
     "account_no": "1234567890",
     "security_id": "SPY",
     "trade_type": "Buy",
-    "amount": 1024,
-    "timestamp": "2024-12-31T12:34:56Z"
+    "order_type": "Market",
+    "quantity": 1024,
+    "expiration": "2025-10-28T20:00:00Z"
 }

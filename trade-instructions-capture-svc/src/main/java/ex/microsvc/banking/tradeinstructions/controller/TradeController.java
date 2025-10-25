@@ -2,15 +2,19 @@ package ex.microsvc.banking.tradeinstructions.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ex.microsvc.banking.tradeinstructions.model.CanonicalTrade;
+import ex.microsvc.banking.tradeinstructions.model.PlatformTrade;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @RestController
@@ -19,9 +23,13 @@ public class TradeController {
 
     private final Validator validator;
     private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, PlatformTrade> kafkaTemplate;
+    private final Map<Integer, CanonicalTrade> buffer;
 
-    public TradeController(Validator validator) {
+    public TradeController(Validator validator, KafkaTemplate kafkaTemplate) {
         this.validator = validator;
+        this.kafkaTemplate = kafkaTemplate;
+        this.buffer = new ConcurrentHashMap<>();
         this.objectMapper = new ObjectMapper();
 
         objectMapper.findAndRegisterModules();  // Enable date/time support (for timestamp field)
@@ -51,6 +59,12 @@ public class TradeController {
                         .collect(Collectors.toList());
                 return ResponseEntity.badRequest().body(errors);
             }
+
+            this.buffer.put(trade.hashCode(), trade);
+            this.kafkaTemplate.send(
+                    "instructions.outbound",
+                    PlatformTrade.fromCanonicalTrade(trade)
+            );
 
             System.out.printf("%s", trade);
 

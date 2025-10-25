@@ -11,10 +11,11 @@ import java.time.Instant;
 @NoArgsConstructor
 public class CanonicalTrade {
 
-    @NotBlank String platform_id;
-    @NotBlank String account_no;
-    @NotBlank String security_id;
-    @NotBlank String trade_type;
-    @NotNull Integer amount;
-    @NotNull Instant timestamp;
+    @NotBlank private String account_no;
+    @NotBlank private String platform_id;
+    @NotBlank private String security_id;
+    @NotBlank private String trade_type;
+    @NotBlank private String order_type;
+    @NotNull private Integer quantity;
+    @NotNull private Instant expiration;
 }
