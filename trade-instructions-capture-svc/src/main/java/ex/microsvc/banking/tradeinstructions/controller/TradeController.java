@@ -2,36 +2,32 @@ package ex.microsvc.banking.tradeinstructions.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ex.microsvc.banking.tradeinstructions.model.CanonicalTrade;
-import ex.microsvc.banking.tradeinstructions.model.PlatformTrade;
+import ex.microsvc.banking.tradeinstructions.service.TradeSvc;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/trade")
 public class TradeController {
 
+    private final TradeSvc tradeService;
+
     private final Validator validator;
     private final ObjectMapper objectMapper;
-    private final KafkaTemplate<String, PlatformTrade> kafkaTemplate;
-    private final Map<Integer, CanonicalTrade> buffer;
 
-    public TradeController(Validator validator, KafkaTemplate kafkaTemplate) {
+    public TradeController(Validator validator, TradeSvc tradeService) {
+        this.tradeService = tradeService;
+
         this.validator = validator;
-        this.kafkaTemplate = kafkaTemplate;
-        this.buffer = new ConcurrentHashMap<>();
         this.objectMapper = new ObjectMapper();
-
         objectMapper.findAndRegisterModules();  // Enable date/time support (for timestamp field)
     }
 
@@ -47,11 +43,8 @@ public class TradeController {
         }
 
         try {
-            // Parse json file to bean
-            CanonicalTrade trade = objectMapper.readValue(file.getInputStream(), CanonicalTrade.class);
-
-            // Validate bean
-            Set<ConstraintViolation<CanonicalTrade>> violations = validator.validate(trade);
+            CanonicalTrade trade = objectMapper.readValue(file.getInputStream(), CanonicalTrade.class);     // Parse json file to bean
+            Set<ConstraintViolation<CanonicalTrade>> violations = validator.validate(trade);                // Validate bean
 
             if (!violations.isEmpty()) {
                 List<String> errors = violations.stream()
@@ -60,13 +53,7 @@ public class TradeController {
                 return ResponseEntity.badRequest().body(errors);
             }
 
-            this.buffer.put(trade.hashCode(), trade);
-            this.kafkaTemplate.send(
-                    "instructions.outbound",
-                    PlatformTrade.fromCanonicalTrade(trade)
-            );
-
-            System.out.printf("%s", trade);
+            this.tradeService.processTrade(trade);
 
             return ResponseEntity.ok("Trade processed successfully");
         } catch (IOException e) {
